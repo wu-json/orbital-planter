@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#101113"/>
+  <defs>
+    <clipPath id="planter">
+      <path d="M14.77 27A21 21 0 1 0 49.23 27Z"/>
+    </clipPath>
+  </defs>
+  <path d="M14.77 27A21 21 0 1 0 49.23 27Z" fill="#e8e9ec"/>
+  <g clip-path="url(#planter)" fill="none" stroke="#101113" stroke-width="3.5">
+    <path d="M0 4 64 68"/>
+    <path d="M0 14 64 78"/>
+    <path d="M0 24 64 88"/>
+  </g>
+  <ellipse cx="32" cy="27" rx="17.23" ry="4.5" fill="#101113" stroke="#e8e9ec" stroke-width="2.5"/>
+  <path d="M32 27V16" fill="none" stroke="#e8e9ec" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M32 21C23 22 20 16 20 11C28 11 33 15 32 21ZM32 17C32 10 38 7 44 8C44 14 39 18 32 17Z" fill="#e8e9ec"/>
+</svg>
