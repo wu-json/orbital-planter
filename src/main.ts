@@ -5,6 +5,8 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
 import { dimensions } from "./model.ts";
+import { createPlantPicker } from "./plant-picker.ts";
+import { createPlantPreview, soilHeightMM, type PlantKind } from "./plants.ts";
 
 type BackgroundMode = "auto" | "dark" | "light";
 type ModelView = "assembled" | "exploded" | "section";
@@ -119,6 +121,7 @@ const finishButtons =
 const viewButtons = document.querySelectorAll<HTMLButtonElement>("[data-view]");
 const rotateButton = requiredElement<HTMLButtonElement>("#rotate");
 const resetButton = requiredElement<HTMLButtonElement>("#reset");
+
 const renderer = createRenderer(viewport);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(33, 1, 0.1, 2000);
@@ -140,11 +143,66 @@ const material = new THREE.MeshStandardMaterial({
 let modelMeshes: ModelMeshes | undefined;
 let targetBodyHeightMM: number = dimensions.assemblyLift;
 let backgroundMode: BackgroundMode = "auto";
+let selectedPlant: PlantKind = "empty";
+let currentView: ModelView = "assembled";
+let plantPreview = createPlantPreview(selectedPlant);
+scene.add(plantPreview.group);
 
 function resetCamera() {
-  camera.position.set(0, -390, 195);
-  controls.target.set(0, 0, 53);
+  if (selectedPlant === "empty") {
+    camera.position.set(
+      currentView === "section" ? 120 : 0,
+      currentView === "section" ? -350 : -390,
+      currentView === "section" ? 170 : 195,
+    );
+    controls.target.set(0, 0, currentView === "section" ? 55 : 53);
+    controls.maxDistance = 700;
+  } else {
+    const bounds = new THREE.Box3(
+      new THREE.Vector3(-70, -70, 0),
+      new THREE.Vector3(70, 70, dimensions.height + targetBodyHeightMM),
+    );
+    const plantBounds = new THREE.Box3().setFromObject(plantPreview.group);
+    plantBounds.translate(
+      new THREE.Vector3(
+        0,
+        0,
+        soilHeightMM + targetBodyHeightMM - plantPreview.group.position.z,
+      ),
+    );
+    bounds.union(plantBounds);
+    const center = bounds.getCenter(new THREE.Vector3());
+    const verticalHalfAngle = THREE.MathUtils.degToRad(camera.fov / 2);
+    const horizontalHalfAngle = Math.atan(
+      Math.tan(verticalHalfAngle) * camera.aspect,
+    );
+    const radius = bounds.getSize(new THREE.Vector3()).length() / 2;
+    const distance =
+      (radius / Math.sin(Math.min(verticalHalfAngle, horizontalHalfAngle))) *
+      1.12;
+    const direction = new THREE.Vector3(
+      currentView === "section" ? 0.3 : 0,
+      -1,
+      0.36,
+    ).normalize();
+    camera.position.copy(center).addScaledVector(direction, distance);
+    controls.target.copy(center);
+    controls.maxDistance = Math.max(700, distance * 2);
+    camera.far = Math.max(2000, distance * 4);
+    camera.updateProjectionMatrix();
+  }
   controls.update();
+}
+
+function setPlant(kind: PlantKind) {
+  plantPreview.dispose();
+  selectedPlant = kind;
+  plantPreview = createPlantPreview(kind);
+  plantPreview.group.position.z =
+    soilHeightMM + (modelMeshes?.body.position.z ?? targetBodyHeightMM);
+  plantPreview.soil.visible = currentView !== "section";
+  scene.add(plantPreview.group);
+  resetCamera();
 }
 
 function updateBackground() {
@@ -158,11 +216,15 @@ function updateBackground() {
 
 function setModelView(view: ModelView) {
   if (!modelMeshes) return;
+  currentView = view;
+  plantPreview.soil.visible = view !== "section";
   modelMeshes.body.visible = view !== "section";
   modelMeshes.section.visible = view === "section";
   targetBodyHeightMM = view === "exploded" ? 42 : dimensions.assemblyLift;
 
-  if (view === "section") {
+  if (selectedPlant !== "empty") {
+    resetCamera();
+  } else if (view === "section") {
     camera.position.set(120, -350, 170);
     controls.target.set(0, 0, 55);
   }
@@ -199,6 +261,8 @@ for (const button of viewButtons) {
   });
 }
 
+createPlantPicker(requiredElement("#plant-picker"), setPlant);
+
 rotateButton.addEventListener("click", () => {
   controls.autoRotate = !controls.autoRotate;
   rotateButton.setAttribute("aria-pressed", String(controls.autoRotate));
@@ -210,6 +274,7 @@ new ResizeObserver(() => {
   renderer.setSize(width, height);
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
+  if (selectedPlant !== "empty") resetCamera();
 }).observe(viewport);
 
 resetCamera();
@@ -238,6 +303,7 @@ renderer.setAnimationLoop(() => {
       elapsedSeconds,
     );
     section.position.z = body.position.z;
+    plantPreview.group.position.z = soilHeightMM + body.position.z;
   }
   controls.update(elapsedSeconds);
   renderer.render(scene, camera);
