@@ -91,9 +91,33 @@
             <button data-background="light" aria-pressed="false">Light</button>
           </div>
         </section>
+        <section class="opening-control" aria-label="Planter opening">
+          <div class="material-label">Opening</div>
+          <div
+            class="opening-options segmented-control"
+            role="group"
+            aria-label="Opening position"
+          >
+            <button
+              data-opening="top"
+              class="active"
+              aria-pressed="true"
+              disabled
+            >
+              Top
+            </button>
+            <button data-opening="diagonal" aria-pressed="false" disabled>
+              Diagonal
+            </button>
+          </div>
+        </section>
         <section class="plant-control" aria-label="Plant preview">
           <div class="material-label" id="plant-label">Plant</div>
           <div class="plant-picker" id="plant-picker"></div>
+        </section>
+        <section class="place-control" aria-label="Place preview">
+          <div class="material-label" id="place-label">Place</div>
+          <div id="place-picker"></div>
         </section>
         <div class="downloads">
           <a class="download" href="/models/orbital-planter.zip" download

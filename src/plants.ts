@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { dimensions } from "./model.ts";
+import { dimensions, openingProfiles, type OpeningKind } from "./model.ts";
 
 export const plantKinds = [
   "empty",
@@ -23,7 +23,33 @@ const soilRadiusMM =
 export interface PlantPreview {
   group: THREE.Group;
   soil: THREE.Group;
+  canopy: THREE.Group;
   dispose(): void;
+}
+
+export function positionPlantPreview(
+  preview: PlantPreview,
+  opening: OpeningKind,
+  bodyLiftMM: number,
+) {
+  const profile = openingProfiles[opening];
+  const compactRosette =
+    opening === "diagonal" && preview.group.name === "succulent";
+  preview.canopy.position.z = compactRosette ? 3 : 0;
+  preview.canopy.scale.setScalar(compactRosette ? 0.85 : 1);
+  const angle = THREE.MathUtils.degToRad(profile.angleDegrees);
+  const openingSoilRadius =
+    Math.sqrt(cavityRadiusMM ** 2 - profile.soilDistanceMM ** 2) - 0.8;
+  const radialScale = openingSoilRadius / soilRadiusMM;
+  preview.group.rotation.y = angle;
+  preview.group.scale.set(radialScale, radialScale, 1);
+  preview.group.position.set(
+    Math.sin(angle) * profile.soilDistanceMM,
+    0,
+    sphereCenterHeightMM +
+      Math.cos(angle) * profile.soilDistanceMM +
+      bodyLiftMM,
+  );
 }
 
 function leafWidth(shape: LeafShape, lengthPosition: number, side: number) {
@@ -246,6 +272,7 @@ export function createPlantPreview(kind: PlantKind): PlantPreview {
   const group = new THREE.Group();
   group.name = kind;
   const soil = new THREE.Group();
+  const canopy = new THREE.Group();
   const leafGeometries = new Map<LeafShape, THREE.BufferGeometry>();
   const leafMaterial = new THREE.MeshStandardMaterial({
     vertexColors: true,
@@ -264,7 +291,7 @@ export function createPlantPreview(kind: PlantKind): PlantPreview {
       stemMaterial,
     );
     stem.castShadow = true;
-    group.add(stem);
+    canopy.add(stem);
     return curve;
   }
 
@@ -295,7 +322,7 @@ export function createPlantPreview(kind: PlantKind): PlantPreview {
     );
     leaf.castShadow = true;
     leaf.receiveShadow = true;
-    group.add(leaf);
+    canopy.add(leaf);
   }
 
   function addPothos() {
@@ -581,12 +608,12 @@ export function createPlantPreview(kind: PlantKind): PlantPreview {
     }
     foliage.castShadow = true;
     foliage.receiveShadow = true;
-    group.add(foliage);
+    canopy.add(foliage);
   }
 
   if (kind !== "empty") {
     soil.add(createSoil());
-    group.add(soil);
+    group.add(soil, canopy);
     const builders = {
       pothos: addPothos,
       snake: addSnakePlant,
@@ -601,6 +628,7 @@ export function createPlantPreview(kind: PlantKind): PlantPreview {
   return {
     group,
     soil,
+    canopy,
     dispose() {
       const geometries = new Set<THREE.BufferGeometry>(leafGeometries.values());
       const materials = new Set<THREE.Material>([leafMaterial, stemMaterial]);

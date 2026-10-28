@@ -7,8 +7,8 @@ export const dimensions = Object.freeze({
   grooveDepth: 2.2,
   grooveCount: 3,
   drainDiameter: 8,
-  saucerDiameter: 88,
-  assemblyLift: 6,
+  saucerDiameter: 70,
+  assemblyLift: 4.8,
 });
 
 const linearLogoDiagonalGaps = [
@@ -29,6 +29,21 @@ export const grooveLayout = Object.freeze({
   })),
 });
 
+export const openingKinds = ["top", "diagonal"] as const;
+export type OpeningKind = (typeof openingKinds)[number];
+export const openingProfiles = {
+  top: { angleDegrees: 0, planeDistanceMM: 52, soilDistanceMM: 46 },
+  diagonal: {
+    angleDegrees: grooveLayout.angleDegrees,
+    planeDistanceMM: 60,
+    soilDistanceMM: 55,
+  },
+} as const;
+
+export function modelAssetPath(opening: OpeningKind, filename: string) {
+  return `/models/${opening === "top" ? "" : "diagonal/"}${filename}`;
+}
+
 const bodyProfile = {
   centerHeightMM: 62,
   floorThicknessMM: 6,
@@ -37,16 +52,20 @@ const bodyProfile = {
 };
 
 const saucerProfile = {
-  heightMM: 10,
-  innerRadiusMM: 40,
-  floorThicknessMM: 3,
+  heightMM: 4.8,
+  innerRadiusMM: 33.2,
+  floorThicknessMM: 2.4,
   seatCount: 3,
-  seatHeightMM: 3,
+  seatHeightMM: 2.4,
   seatRadiusMM: 6,
   seatDistanceFromCenterMM: 22,
 };
 
-export function createModel(kernel: ManifoldToplevel, circularSegments = 192) {
+export function createModel(
+  kernel: ManifoldToplevel,
+  circularSegments = 192,
+  opening: OpeningKind = "top",
+) {
   const { Manifold } = kernel;
   const allocatedSolids: Manifold[] = [];
 
@@ -67,8 +86,6 @@ export function createModel(kernel: ManifoldToplevel, circularSegments = 192) {
     trackSolid(solid.subtract(cutter));
   const intersect = (first: Manifold, second: Manifold) =>
     trackSolid(first.intersect(second));
-  const trimAboveZ = (solid: Manifold, heightMM: number) =>
-    trackSolid(solid.trimByPlane([0, 0, -1], -heightMM));
   const trimBelowZ = (solid: Manifold, heightMM: number) =>
     trackSolid(solid.trimByPlane([0, 0, 1], heightMM));
 
@@ -106,7 +123,17 @@ export function createModel(kernel: ManifoldToplevel, circularSegments = 192) {
     const sphereCenterMM: Vec3 = [0, 0, bodyProfile.centerHeightMM];
     const outerSphere = translate(createGroovedSphere(), sphereCenterMM);
     const flatBottom = trimBelowZ(outerSphere, 0);
-    const openTop = trimAboveZ(flatBottom, dimensions.height);
+    const profile = openingProfiles[opening];
+    const angle = (profile.angleDegrees * Math.PI) / 180;
+    const normal: Vec3 = [Math.sin(angle), 0, Math.cos(angle)];
+    const openingHeightMM =
+      profile.planeDistanceMM + bodyProfile.centerHeightMM * normal[2];
+    const openTop = trackSolid(
+      flatBottom.trimByPlane(
+        normal.map((coordinate) => -coordinate) as Vec3,
+        -openingHeightMM,
+      ),
+    );
     const innerRadiusMM = dimensions.diameter / 2 - dimensions.wall;
     const innerSphere = translate(sphere(innerRadiusMM), sphereCenterMM);
     const plantingCavity = trimBelowZ(

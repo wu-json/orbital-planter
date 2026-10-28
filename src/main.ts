@@ -4,12 +4,22 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
-import { dimensions } from "./model.ts";
+import { dimensions, modelAssetPath, type OpeningKind } from "./model.ts";
+import { createPlacePicker } from "./place-picker.ts";
+import { createPlacePreview, officeStyles, type PlaceKind } from "./places.ts";
 import { createPlantPicker } from "./plant-picker.ts";
-import { createPlantPreview, soilHeightMM, type PlantKind } from "./plants.ts";
+import {
+  createPlantPreview,
+  positionPlantPreview,
+  type PlantKind,
+} from "./plants.ts";
 
-type BackgroundMode = "auto" | "dark" | "light";
-type ModelView = "assembled" | "exploded" | "section";
+import {
+  loadViewerSettings,
+  saveViewerSettings,
+  type BackgroundMode,
+  type ModelView,
+} from "./settings.ts";
 type PlanterMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
 
 interface ModelMeshes {
@@ -68,7 +78,10 @@ function addStudioLighting(scene: THREE.Scene) {
 
   const fillLight = new THREE.DirectionalLight(0xf3f7ff, 1.6);
   fillLight.position.set(180, 100, 180);
-  scene.add(ambientLight, keyLight, fillLight);
+  const lights = new THREE.Group();
+  lights.add(ambientLight, keyLight, fillLight);
+  scene.add(lights);
+  return lights;
 }
 
 function createShadowGround() {
@@ -83,15 +96,17 @@ function createShadowGround() {
 
 async function loadModelMeshes(
   material: THREE.MeshStandardMaterial,
+  opening: OpeningKind,
 ): Promise<ModelMeshes> {
   const loader = new STLLoader();
   const geometries = await Promise.all(
     ["planter", "saucer", "section"].map((name) =>
-      loader.loadAsync(`/models/orbital-${name}.stl`),
+      loader.loadAsync(modelAssetPath(opening, `orbital-${name}.stl`)),
     ),
   );
   const [body, saucer, section] = geometries.map((geometry) => {
     const shadedGeometry = toCreasedNormals(geometry, Math.PI / 5);
+    shadedGeometry.computeBoundingBox();
     const mesh = new THREE.Mesh(shadedGeometry, material);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -121,9 +136,19 @@ const finishButtons =
 const viewButtons = document.querySelectorAll<HTMLButtonElement>("[data-view]");
 const rotateButton = requiredElement<HTMLButtonElement>("#rotate");
 const resetButton = requiredElement<HTMLButtonElement>("#reset");
+const openingButtons =
+  document.querySelectorAll<HTMLButtonElement>("[data-opening]");
+const downloadLink = requiredElement<HTMLAnchorElement>(".download");
+const savedSettings = loadViewerSettings(
+  [...finishButtons].flatMap((button) =>
+    button.dataset.color ? [button.dataset.color] : [],
+  ),
+);
 
 const renderer = createRenderer(viewport);
 const scene = new THREE.Scene();
+const studioLights = addStudioLighting(scene);
+const backgroundControl = requiredElement(".background-control");
 const camera = new THREE.PerspectiveCamera(33, 1, 0.1, 2000);
 camera.up.set(0, 0, 1);
 
@@ -136,19 +161,69 @@ controls.autoRotateSpeed = 0.7;
 
 const ground = createShadowGround();
 const material = new THREE.MeshStandardMaterial({
-  color: "#d8d3c6",
+  color: savedSettings.finish,
   roughness: 0.83,
   metalness: 0,
 });
 let modelMeshes: ModelMeshes | undefined;
-let targetBodyHeightMM: number = dimensions.assemblyLift;
-let backgroundMode: BackgroundMode = "auto";
-let selectedPlant: PlantKind = "empty";
-let currentView: ModelView = "assembled";
+let modelVariants: Record<OpeningKind, ModelMeshes> | undefined;
+let selectedOpening: OpeningKind = savedSettings.opening;
+let targetBodyHeightMM =
+  savedSettings.view === "exploded" ? 42 : dimensions.assemblyLift;
+let backgroundMode: BackgroundMode = savedSettings.background;
+let selectedPlant: PlantKind = savedSettings.plant;
+let selectedPlace: PlaceKind = "studio";
+let placePreview = createPlacePreview(selectedPlace);
+scene.add(placePreview.group);
+let currentView: ModelView = savedSettings.view;
 let plantPreview = createPlantPreview(selectedPlant);
 scene.add(plantPreview.group);
 
+function persistSettings() {
+  saveViewerSettings({
+    finish: `#${material.color.getHexString()}`,
+    background: backgroundMode,
+    plant: selectedPlant,
+    place: selectedPlace,
+    opening: selectedOpening,
+    view: currentView,
+    rotate: controls.autoRotate,
+  });
+}
+
+function updateDownloadLink() {
+  downloadLink.href = modelAssetPath(selectedOpening, "orbital-planter.zip");
+  downloadLink.download =
+    selectedOpening === "top"
+      ? "orbital-planter.zip"
+      : "orbital-planter-diagonal.zip";
+}
+
 function resetCamera() {
+  const inOffice = selectedPlace !== "studio";
+  camera.fov = inOffice ? 40 : 33;
+  camera.near = inOffice ? 5 : 0.1;
+  camera.far = inOffice ? 12000 : 2000;
+  controls.enablePan = !inOffice;
+  controls.minDistance = inOffice ? 350 : 185;
+  controls.minPolarAngle = inOffice ? Math.PI / 6 : 0;
+  controls.maxPolarAngle = inOffice ? Math.PI * 0.44 : Math.PI * 0.87;
+  controls.minAzimuthAngle = inOffice ? -Math.PI * 0.28 : -Infinity;
+  controls.maxAzimuthAngle = inOffice ? Math.PI * 0.28 : Infinity;
+  controls.autoRotateSpeed = 0.7;
+  camera.updateProjectionMatrix();
+  if (inOffice) {
+    controls.target.set(-90, 50, 100);
+    const canopyMargin =
+      selectedOpening === "diagonal" && selectedPlant !== "empty" ? 1.1 : 1;
+    const framingScale = Math.max(1, 0.95 / camera.aspect) * canopyMargin;
+    camera.position
+      .copy(controls.target)
+      .addScaledVector(new THREE.Vector3(90, -700, 300), framingScale);
+    controls.maxDistance = camera.position.distanceTo(controls.target) * 1.3;
+    controls.update();
+    return;
+  }
   if (selectedPlant === "empty") {
     camera.position.set(
       currentView === "section" ? 120 : 0,
@@ -160,14 +235,20 @@ function resetCamera() {
   } else {
     const bounds = new THREE.Box3(
       new THREE.Vector3(-70, -70, 0),
-      new THREE.Vector3(70, 70, dimensions.height + targetBodyHeightMM),
+      new THREE.Vector3(
+        70,
+        70,
+        (modelMeshes?.body.geometry.boundingBox?.max.z ?? dimensions.height) +
+          targetBodyHeightMM,
+      ),
     );
     const plantBounds = new THREE.Box3().setFromObject(plantPreview.group);
     plantBounds.translate(
       new THREE.Vector3(
         0,
         0,
-        soilHeightMM + targetBodyHeightMM - plantPreview.group.position.z,
+        targetBodyHeightMM -
+          (modelMeshes?.body.position.z ?? targetBodyHeightMM),
       ),
     );
     bounds.union(plantBounds);
@@ -198,14 +279,53 @@ function setPlant(kind: PlantKind) {
   plantPreview.dispose();
   selectedPlant = kind;
   plantPreview = createPlantPreview(kind);
-  plantPreview.group.position.z =
-    soilHeightMM + (modelMeshes?.body.position.z ?? targetBodyHeightMM);
+  positionPlantPreview(
+    plantPreview,
+    selectedOpening,
+    modelMeshes?.body.position.z ?? targetBodyHeightMM,
+  );
   plantPreview.soil.visible = currentView !== "section";
   scene.add(plantPreview.group);
   resetCamera();
 }
 
+function setOpening(opening: OpeningKind) {
+  if (!modelVariants || !modelMeshes) return;
+  scene.remove(modelMeshes.body, modelMeshes.saucer, modelMeshes.section);
+  selectedOpening = opening;
+  modelMeshes = modelVariants[opening];
+  modelMeshes.body.position.z = targetBodyHeightMM;
+  modelMeshes.section.position.z = targetBodyHeightMM;
+  scene.add(modelMeshes.body, modelMeshes.saucer, modelMeshes.section);
+  positionPlantPreview(plantPreview, opening, targetBodyHeightMM);
+  updateDownloadLink();
+  setModelView(currentView);
+  resetCamera();
+}
+
+function setPlace(kind: PlaceKind) {
+  placePreview.dispose();
+  selectedPlace = kind;
+  placePreview = createPlacePreview(kind);
+  scene.add(placePreview.group);
+  const inStudio = kind === "studio";
+  ground.visible = inStudio;
+  studioLights.visible = inStudio;
+  backgroundControl.hidden = !inStudio;
+  studio.dataset.place = kind;
+  scene.background = inStudio
+    ? null
+    : new THREE.Color(officeStyles[kind].background);
+  renderer.toneMappingExposure = inStudio ? 1.5 : officeStyles[kind].exposure;
+  updateBackground();
+  resetCamera();
+}
+
 function updateBackground() {
+  if (selectedPlace !== "studio") {
+    studio.dataset.background = officeStyles[selectedPlace].theme;
+    return;
+  }
   const contrastingBackground =
     relativeLuminance(material.color) > 0.18 ? "dark" : "light";
   const background =
@@ -222,7 +342,7 @@ function setModelView(view: ModelView) {
   modelMeshes.section.visible = view === "section";
   targetBodyHeightMM = view === "exploded" ? 42 : dimensions.assemblyLift;
 
-  if (selectedPlant !== "empty") {
+  if (selectedPlant !== "empty" || selectedPlace !== "studio") {
     resetCamera();
   } else if (view === "section") {
     camera.position.set(120, -350, 170);
@@ -237,6 +357,7 @@ for (const button of backgroundButtons) {
     backgroundMode = mode;
     updateBackground();
     selectButton(backgroundButtons, button);
+    persistSettings();
   });
 }
 
@@ -247,6 +368,7 @@ for (const button of finishButtons) {
     material.color.set(color);
     updateBackground();
     selectButton(finishButtons, button);
+    persistSettings();
   });
 }
 
@@ -258,14 +380,41 @@ for (const button of viewButtons) {
       return;
     setModelView(view);
     selectButton(viewButtons, button);
+    persistSettings();
   });
 }
 
-createPlantPicker(requiredElement("#plant-picker"), setPlant);
+for (const button of openingButtons) {
+  button.addEventListener("click", () => {
+    const opening = button.dataset.opening;
+    if (!modelVariants || (opening !== "top" && opening !== "diagonal")) return;
+    setOpening(opening);
+    selectButton(openingButtons, button);
+    persistSettings();
+  });
+}
+
+createPlantPicker(
+  requiredElement("#plant-picker"),
+  (kind) => {
+    setPlant(kind);
+    persistSettings();
+  },
+  savedSettings.plant,
+);
+createPlacePicker(
+  requiredElement("#place-picker"),
+  (kind) => {
+    setPlace(kind);
+    persistSettings();
+  },
+  savedSettings.place,
+);
 
 rotateButton.addEventListener("click", () => {
   controls.autoRotate = !controls.autoRotate;
   rotateButton.setAttribute("aria-pressed", String(controls.autoRotate));
+  persistSettings();
 });
 resetButton.addEventListener("click", resetCamera);
 
@@ -274,17 +423,35 @@ new ResizeObserver(() => {
   renderer.setSize(width, height);
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
-  if (selectedPlant !== "empty") resetCamera();
+  if (selectedPlant !== "empty" || selectedPlace !== "studio") resetCamera();
 }).observe(viewport);
 
-resetCamera();
-updateBackground();
-addStudioLighting(scene);
+positionPlantPreview(plantPreview, selectedOpening, targetBodyHeightMM);
+plantPreview.soil.visible = currentView !== "section";
+setPlace(savedSettings.place);
+controls.autoRotate = savedSettings.rotate;
+rotateButton.setAttribute("aria-pressed", String(controls.autoRotate));
+for (const [buttons, key, value] of [
+  [finishButtons, "color", savedSettings.finish],
+  [backgroundButtons, "background", backgroundMode],
+  [viewButtons, "view", currentView],
+  [openingButtons, "opening", selectedOpening],
+] as const) {
+  const selected = [...buttons].find((button) => button.dataset[key] === value);
+  if (selected) selectButton(buttons, selected);
+}
+updateDownloadLink();
 scene.add(ground);
 
 try {
-  modelMeshes = await loadModelMeshes(material);
-  scene.add(modelMeshes.body, modelMeshes.saucer, modelMeshes.section);
+  const [top, diagonal] = await Promise.all([
+    loadModelMeshes(material, "top"),
+    loadModelMeshes(material, "diagonal"),
+  ]);
+  modelVariants = { top, diagonal };
+  modelMeshes = modelVariants[selectedOpening];
+  for (const button of openingButtons) button.disabled = false;
+  setOpening(selectedOpening);
   loading.remove();
 } catch (error) {
   loading.textContent = "Unable to load the model. Refresh to try again.";
@@ -303,7 +470,14 @@ renderer.setAnimationLoop(() => {
       elapsedSeconds,
     );
     section.position.z = body.position.z;
-    plantPreview.group.position.z = soilHeightMM + body.position.z;
+    positionPlantPreview(plantPreview, selectedOpening, body.position.z);
+  }
+  if (selectedPlace !== "studio" && controls.autoRotate) {
+    const angle = controls.getAzimuthalAngle();
+    if (angle <= controls.minAzimuthAngle + 0.02)
+      controls.autoRotateSpeed = -0.7;
+    if (angle >= controls.maxAzimuthAngle - 0.02)
+      controls.autoRotateSpeed = 0.7;
   }
   controls.update(elapsedSeconds);
   renderer.render(scene, camera);

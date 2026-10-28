@@ -145,14 +145,17 @@ aside {
 .background-options {
   margin-left: 0;
 }
-.background-options button {
+.background-options button,
+.opening-options button {
   flex: 1;
   padding: 0 7px;
 }
-.plant-control {
+.opening-control,
+.plant-control,
+.place-control {
   margin-top: 28px;
 }
-.plant-trigger {
+.picker-trigger {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -166,33 +169,33 @@ aside {
   font-size: 11px;
   text-align: left;
 }
-.plant-trigger:hover,
-.plant-trigger[aria-expanded="true"] {
+.picker-trigger:hover,
+.picker-trigger[aria-expanded="true"] {
   border-color: #ffffff32;
   background: #ffffff06;
 }
-.plant-current-symbol {
+.picker-current-symbol {
   display: flex;
   color: #9a9fa9;
 }
-.plant-current-symbol .plant-symbol {
+.picker-current-symbol .picker-symbol {
   width: 22px;
   height: 22px;
 }
-#plant-value {
+.picker-value {
   flex: 1;
 }
-.plant-chevron {
+.picker-chevron {
   width: 14px;
   height: 14px;
   flex: 0 0 14px;
   color: #8a8f98;
   transition: transform 160ms ease;
 }
-.plant-trigger[aria-expanded="true"] .plant-chevron {
+.picker-trigger[aria-expanded="true"] .picker-chevron {
   transform: rotate(180deg);
 }
-.plant-menu {
+.picker-menu {
   position: fixed;
   z-index: 20;
   padding: 5px;
@@ -207,12 +210,12 @@ aside {
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: #ffffff20 transparent;
-  animation: plant-menu-enter 120ms ease-out;
+  animation: picker-menu-enter 120ms ease-out;
 }
-.plant-menu[hidden] {
+.picker-menu[hidden] {
   display: none;
 }
-.plant-option {
+.picker-option {
   display: flex;
   align-items: center;
   gap: 11px;
@@ -225,45 +228,45 @@ aside {
   color: #a3a7b1;
   text-align: left;
 }
-.plant-option:hover,
-.plant-option:focus-visible {
+.picker-option:hover,
+.picker-option:focus-visible {
   background: #ffffff08;
   color: #e4e6ec;
   outline: none;
 }
-.plant-option[aria-selected="true"] {
+.picker-option[aria-selected="true"] {
   background: #ffffff0c;
   color: #f0f1f5;
 }
-.plant-symbol {
+.picker-symbol {
   width: 28px;
   height: 28px;
   flex: 0 0 28px;
 }
-.plant-option-copy {
+.picker-option-copy {
   display: flex;
   flex: 1;
   flex-direction: column;
   gap: 4px;
 }
-.plant-option-name {
+.picker-option-name {
   font-size: 11px;
   font-weight: 450;
   color: #e0e2e8;
 }
-.plant-option-shape {
+.picker-option-shape {
   font-size: 10px;
   color: #9297a2;
 }
-.plant-check {
+.picker-check {
   width: 14px;
   height: 14px;
   opacity: 0;
 }
-.plant-option[aria-selected="true"] .plant-check {
+.picker-option[aria-selected="true"] .picker-check {
   opacity: 1;
 }
-@keyframes plant-menu-enter {
+@keyframes picker-menu-enter {
   from {
     opacity: 0;
     transform: translateY(3px);
@@ -362,6 +365,12 @@ canvas {
   display: flex;
   gap: 8px;
 }
+.studio[data-place]:not([data-place="studio"]) .viewer-tools {
+  padding: 3px;
+  border: 1px solid var(--control-border);
+  border-radius: 7px;
+  background: var(--backdrop);
+}
 .viewer-tools button {
   display: inline-flex;
   align-items: center;
@@ -400,7 +409,7 @@ canvas {
 }
 @media (pointer: coarse) {
   .segmented-control button,
-  .plant-trigger,
+  .picker-trigger,
   .viewer-tools button,
   .download {
     min-height: 44px;
@@ -428,7 +437,9 @@ canvas {
   .background-control {
     margin-top: 0;
   }
-  .plant-control {
+  .opening-control,
+  .plant-control,
+  .place-control {
     grid-column: 1 / -1;
     margin-top: 0;
   }
@@ -461,7 +472,8 @@ canvas {
   .swatch {
     width: 40px;
   }
-  .background-options button {
+  .background-options button,
+  .opening-options button {
     padding: 0 5px;
   }
 }

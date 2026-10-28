@@ -1,8 +1,13 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { createPlantPreview, plantKinds, soilHeightMM } from "../src/plants.ts";
-import { dimensions } from "../src/model.ts";
+import {
+  createPlantPreview,
+  plantKinds,
+  soilHeightMM,
+  positionPlantPreview,
+} from "../src/plants.ts";
+import { dimensions, openingKinds, openingProfiles } from "../src/model.ts";
 
 test("empty preview adds neither foliage nor soil", () => {
   const preview = createPlantPreview("empty");
@@ -11,43 +16,48 @@ test("empty preview adds neither foliage nor soil", () => {
 });
 
 test("plant meshes contain finite vertices and stay clear of the planter walls", () => {
-  for (const kind of plantKinds.filter((kind) => kind !== "empty")) {
-    const preview = createPlantPreview(kind);
-    preview.group.position.z = soilHeightMM;
-    preview.group.updateMatrixWorld(true);
-    const point = new THREE.Vector3();
-    let leaves = 0;
-    preview.group.traverse((object) => {
-      if (!(object instanceof THREE.Mesh)) return;
-      const positions = object.geometry.getAttribute("position");
-      for (let index = 0; index < positions.count; index++) {
-        point
-          .fromBufferAttribute(positions, index)
-          .applyMatrix4(object.matrixWorld);
-        assert.ok(
-          Number.isFinite(point.x) &&
-            Number.isFinite(point.y) &&
-            Number.isFinite(point.z),
-        );
-        if (
-          !object.name.endsWith("-leaf") ||
-          point.z < 0 ||
-          point.z > dimensions.height
-        )
-          continue;
-        const sphereRadius = Math.hypot(point.x, point.y, point.z - 62);
-        assert.ok(
-          sphereRadius < 64.3 || sphereRadius > 69.7,
-          `${kind} foliage intersects the planter wall at ${point.toArray().map((value) => value.toFixed(1))}`,
-        );
-      }
-      if (object.name.endsWith("-leaf")) leaves++;
-    });
-    assert.ok(
-      kind === "asparagus" || leaves >= 6,
-      `${kind} has a complete canopy`,
-    );
-    preview.dispose();
+  for (const opening of openingKinds) {
+    const profile = openingProfiles[opening];
+    const angle = THREE.MathUtils.degToRad(profile.angleDegrees);
+    for (const kind of plantKinds.filter((kind) => kind !== "empty")) {
+      const preview = createPlantPreview(kind);
+      positionPlantPreview(preview, opening, 0);
+      preview.group.updateMatrixWorld(true);
+      const point = new THREE.Vector3();
+      let leaves = 0;
+      preview.group.traverse((object) => {
+        if (!(object instanceof THREE.Mesh)) return;
+        const positions = object.geometry.getAttribute("position");
+        for (let index = 0; index < positions.count; index++) {
+          point
+            .fromBufferAttribute(positions, index)
+            .applyMatrix4(object.matrixWorld);
+          assert.ok(
+            Number.isFinite(point.x) &&
+              Number.isFinite(point.y) &&
+              Number.isFinite(point.z),
+          );
+          if (
+            !object.name.endsWith("-leaf") ||
+            point.z < 0 ||
+            Math.sin(angle) * point.x + Math.cos(angle) * (point.z - 62) >
+              profile.planeDistanceMM
+          )
+            continue;
+          const sphereRadius = Math.hypot(point.x, point.y, point.z - 62);
+          assert.ok(
+            sphereRadius < 64.3 || sphereRadius > 69.7,
+            `${opening} ${kind} foliage intersects the planter wall at ${point.toArray().map((value) => value.toFixed(1))}`,
+          );
+        }
+        if (object.name.endsWith("-leaf")) leaves++;
+      });
+      assert.ok(
+        kind === "asparagus" || leaves >= 6,
+        `${kind} has a complete canopy`,
+      );
+      preview.dispose();
+    }
   }
 });
 

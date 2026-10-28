@@ -6,8 +6,8 @@
     "grooveDepth": 2.2,
     "grooveCount": 3,
     "drainDiameter": 8,
-    "saucerDiameter": 88,
-    "assemblyLift": 6
+    "saucerDiameter": 70,
+    "assemblyLift": 4.8
   },
   "grooves": {
     "reference": "https://static.linear.app/design-assets/Linear-Brand-Assets.zip?v=3",
@@ -26,6 +26,11 @@
         "widthMM": 10.380386018478248
       }
     ]
+  },
+  "opening": {
+    "angleDegrees": 0,
+    "planeDistanceMM": 52,
+    "soilDistanceMM": 46
   },
   "units": "mm",
   "parts": {
@@ -47,17 +52,17 @@
     },
     "saucer": {
       "triangles": 3836,
-      "volumeMM3": 26648.515071355087,
+      "volumeMM3": 10974.212814788081,
       "bounds": {
         "min": [
-          -44,
-          -44,
+          -35,
+          -35,
           0
         ],
         "max": [
-          44,
-          44,
-          10
+          35,
+          35,
+          4.8
         ]
       }
     },

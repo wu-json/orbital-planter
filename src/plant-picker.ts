@@ -1,3 +1,4 @@
+import { createOptionPicker } from "./option-picker.ts";
 import { plantKinds, type PlantKind } from "./plants.ts";
 
 const plants: Record<
@@ -49,164 +50,26 @@ const plants: Record<
 };
 
 function plantSymbol(drawing: string) {
-  return `<svg class="plant-symbol" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${drawing}</svg>`;
+  return `<svg class="picker-symbol" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${drawing}</svg>`;
 }
 
 export function createPlantPicker(
   container: HTMLElement,
   onChange: (kind: PlantKind) => void,
+  initialValue: PlantKind = "empty",
 ) {
-  let selected: PlantKind = "empty";
-  container.innerHTML = `
-    <button class="plant-trigger" id="plant-select" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="plant-menu" aria-labelledby="plant-label plant-value">
-      <span class="plant-current-symbol">${plantSymbol(plants.empty.drawing)}</span>
-      <span id="plant-value">Empty</span>
-      <svg class="plant-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" aria-hidden="true"><path d="m5 6.5 3 3 3-3"/></svg>
-    </button>
-    <div class="plant-menu" id="plant-menu" role="listbox" aria-labelledby="plant-label" hidden>
-      ${plantKinds
-        .map(
-          (kind) => `
-        <button class="plant-option" type="button" role="option" data-plant="${kind}" aria-selected="${kind === selected}" tabindex="-1">
-          ${plantSymbol(plants[kind].drawing)}
-          <span class="plant-option-copy"><span class="plant-option-name">${plants[kind].name}</span><span class="plant-option-shape">${plants[kind].silhouette}</span></span>
-          <svg class="plant-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m3.5 8 3 3 6-6"/></svg>
-        </button>
-      `,
-        )
-        .join("")}
-    </div>
-  `;
-
-  const trigger = container.querySelector<HTMLButtonElement>(".plant-trigger")!;
-  const menu = container.querySelector<HTMLElement>(".plant-menu")!;
-  const value = container.querySelector<HTMLElement>("#plant-value")!;
-  const currentSymbol = container.querySelector<HTMLElement>(
-    ".plant-current-symbol",
-  )!;
-  const options = [
-    ...container.querySelectorAll<HTMLButtonElement>(".plant-option"),
-  ];
-
-  function positionMenu() {
-    const anchor = trigger.getBoundingClientRect();
-    const spaceAbove = anchor.top - 16;
-    const spaceBelow = innerHeight - anchor.bottom - 16;
-    const openAbove = spaceBelow < 280 && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(
-      100,
-      Math.min(390, openAbove ? spaceAbove : spaceBelow),
-    );
-    const width = Math.min(280, innerWidth - 24);
-    menu.style.width = `${width}px`;
-    menu.style.maxHeight = `${maxHeight}px`;
-    menu.style.left = `${Math.max(12, Math.min(anchor.left, innerWidth - width - 12))}px`;
-    menu.style.top = openAbove ? "auto" : `${anchor.bottom + 7}px`;
-    menu.style.bottom = openAbove
-      ? `${innerHeight - anchor.top + 7}px`
-      : "auto";
-  }
-
-  function focusOption(index: number) {
-    const option = options[(index + options.length) % options.length];
-    option.focus({ preventScroll: true });
-    option.scrollIntoView({ block: "nearest" });
-  }
-
-  function openMenu() {
-    menu.hidden = false;
-    trigger.setAttribute("aria-expanded", "true");
-    positionMenu();
-    focusOption(plantKinds.indexOf(selected));
-  }
-
-  function closeMenu(restoreFocus = true) {
-    menu.hidden = true;
-    trigger.setAttribute("aria-expanded", "false");
-    if (restoreFocus) trigger.focus({ preventScroll: true });
-  }
-
-  trigger.addEventListener("click", () =>
-    menu.hidden ? openMenu() : closeMenu(),
-  );
-  trigger.addEventListener("keydown", (event) => {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      openMenu();
-    }
-  });
-
-  for (const [index, option] of options.entries()) {
-    option.addEventListener("click", () => {
-      const kind = plantKinds[index];
-      const changed = kind !== selected;
-      selected = kind;
-      value.textContent = plants[kind].name;
-      currentSymbol.innerHTML = plantSymbol(plants[kind].drawing);
-      options.forEach((button, optionIndex) =>
-        button.setAttribute("aria-selected", String(index === optionIndex)),
-      );
-      closeMenu();
-      if (changed) onChange(kind);
-    });
-    option.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeMenu();
-      } else if (event.key === "Tab") {
-        closeMenu();
-      } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
-        event.preventDefault();
-        const target =
-          event.key === "Home"
-            ? 0
-            : event.key === "End"
-              ? options.length - 1
-              : index + (event.key === "ArrowDown" ? 1 : -1);
-        focusOption(target);
-      } else if (
-        event.key.length === 1 &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        event.key !== " "
-      ) {
-        const match = plantKinds.findIndex((kind) =>
-          plants[kind].name.toLowerCase().startsWith(event.key.toLowerCase()),
-        );
-        if (match >= 0) focusOption(match);
-      }
-    });
-  }
-
-  document.addEventListener("pointerdown", (event) => {
-    if (
-      !menu.hidden &&
-      event.target instanceof Node &&
-      !container.contains(event.target)
-    )
-      closeMenu(false);
-  });
-  container.addEventListener("focusout", (event) => {
-    if (
-      !menu.hidden &&
-      event.relatedTarget instanceof Node &&
-      !container.contains(event.relatedTarget)
-    )
-      closeMenu(false);
-  });
-  window.addEventListener("resize", () => {
-    if (!menu.hidden) positionMenu();
-  });
-  window.addEventListener(
-    "scroll",
-    (event) => {
-      if (
-        !menu.hidden &&
-        event.target instanceof Node &&
-        !menu.contains(event.target)
-      )
-        closeMenu(false);
+  return createOptionPicker(
+    container,
+    {
+      labelId: "plant-label",
+      initialValue,
+      options: plantKinds.map((value) => ({
+        value,
+        name: plants[value].name,
+        description: plants[value].silhouette,
+        icon: plantSymbol(plants[value].drawing),
+      })),
     },
-    true,
+    onChange,
   );
 }

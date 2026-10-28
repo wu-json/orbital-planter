@@ -4,16 +4,26 @@ import { readFile } from "node:fs/promises";
 import Module from "manifold-3d";
 import * as THREE from "three";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
-import { createModel } from "../src/model.ts";
+import {
+  createModel,
+  dimensions,
+  modelAssetPath,
+  openingKinds,
+} from "../src/model.ts";
 import { binarySTL } from "../src/stl.ts";
 import { unzipSync } from "fflate";
 const kernel = await Module();
 kernel.setup();
 const model = createModel(kernel);
+const diagonalModel = createModel(kernel, 192, "diagonal");
+const variants = { top: model, diagonal: diagonalModel };
 
 test("printable parts are closed, connected solids with positive volume", () => {
-  for (const name of ["body", "saucer"] as const) {
-    const part = model[name];
+  for (const [name, part] of [
+    ["body", model.body],
+    ["saucer", model.saucer],
+    ["diagonal", diagonalModel.body],
+  ] as const) {
     assert.equal(part.status(), "NoError");
     assert.ok(part.volume() > 0);
     const components = part.decompose();
@@ -53,11 +63,46 @@ test("body and saucer dimensions match their specification", () => {
   assert.equal(bodyBounds.min[2], 0);
   assert.ok(bodyBounds.min[0] >= -70 && bodyBounds.min[0] <= -67.8);
   assert.deepEqual(model.saucer.boundingBox(), {
-    min: [-44, -44, 0],
-    max: [44, 44, 10],
+    min: [-35, -35, 0],
+    max: [35, 35, 4.8],
   });
   assert.ok(Math.abs(model.section.volume() * 2 - model.body.volume()) < 0.001);
 });
+test("the smaller saucer clears both bodies and supports their flat bases", () => {
+  for (const variant of Object.values(variants)) {
+    const assembledBody = variant.body.translate([
+      0,
+      0,
+      dimensions.assemblyLift,
+    ]);
+    const overlap = assembledBody.intersect(variant.saucer);
+    assert.ok(
+      Math.abs(overlap.volume()) < 0.001,
+      "saucer rim does not intersect the sphere",
+    );
+    const geometry = new STLLoader().parse(
+      binarySTL(variant.saucer.getMesh()).buffer,
+    );
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geometry, material);
+    for (let seat = 0; seat < 3; seat++) {
+      const angle = (seat * Math.PI * 2) / 3;
+      const [hit] = new THREE.Raycaster(
+        new THREE.Vector3(Math.cos(angle) * 22, Math.sin(angle) * 22, 20),
+        new THREE.Vector3(0, 0, -1),
+      ).intersectObject(mesh);
+      assert.ok(
+        Math.abs(hit.point.z - dimensions.assemblyLift) < 0.001,
+        "seat meets the body base",
+      );
+    }
+    geometry.dispose();
+    material.dispose();
+    overlap.delete();
+    assembledBody.delete();
+  }
+});
+
 test("the cavity opens at the top and drains through the floor", () => {
   const geometry = new STLLoader().parse(
     binarySTL(model.body.getMesh()).buffer,
@@ -83,33 +128,76 @@ test("the cavity opens at the top and drains through the floor", () => {
   geometry.dispose();
   material.dispose();
 });
-test("committed STL exports reproduce the CAD geometry exactly", async () => {
-  for (const [key, file] of [
-    ["body", "planter"],
-    ["saucer", "saucer"],
-    ["section", "section"],
-  ] as const) {
-    const expected = Buffer.from(binarySTL(model[key].getMesh()));
-    assert.deepEqual(
-      await readFile(`public/models/orbital-${file}.stl`),
-      expected,
-    );
+test("exported STL files reproduce both opening variants exactly", async () => {
+  for (const opening of openingKinds) {
+    for (const [key, file] of [
+      ["body", "planter"],
+      ["saucer", "saucer"],
+      ["section", "section"],
+    ] as const) {
+      assert.deepEqual(
+        await readFile(
+          `public${modelAssetPath(opening, `orbital-${file}.stl`)}`,
+        ),
+        Buffer.from(binarySTL(variants[opening][key].getMesh())),
+      );
+    }
   }
 });
-test("download archive contains exactly the two printable STL files", async () => {
-  const archive = unzipSync(
-    await readFile("public/models/orbital-planter.zip"),
-  );
-  assert.deepEqual(Object.keys(archive).sort(), [
-    "orbital-planter.stl",
-    "orbital-saucer.stl",
-  ]);
-  for (const [filename, contents] of Object.entries(archive)) {
-    assert.deepEqual(
-      Buffer.from(contents),
-      await readFile(`public/models/${filename}`),
+
+test("each download contains only its matching planter and saucer", async () => {
+  for (const opening of openingKinds) {
+    const archive = unzipSync(
+      await readFile(`public${modelAssetPath(opening, "orbital-planter.zip")}`),
     );
+    assert.deepEqual(Object.keys(archive).sort(), [
+      "orbital-planter.stl",
+      "orbital-saucer.stl",
+    ]);
+    for (const [filename, contents] of Object.entries(archive)) {
+      assert.deepEqual(
+        Buffer.from(contents),
+        await readFile(`public${modelAssetPath(opening, filename)}`),
+      );
+    }
   }
+});
+
+test("diagonal mouth follows the stripes with a smaller aperture and a flat draining base", () => {
+  const geometry = new STLLoader().parse(
+    binarySTL(diagonalModel.body.getMesh()).buffer,
+  );
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  const mesh = new THREE.Mesh(geometry, material);
+  const normal = new THREE.Vector3(1, 0, 1).normalize();
+  const center = new THREE.Vector3(0, 0, 62);
+  for (const radius of [0, 21, 24]) {
+    const origin = center
+      .clone()
+      .addScaledVector(normal, 100)
+      .add(new THREE.Vector3(0, radius, 0));
+    const [hit] = new THREE.Raycaster(
+      origin,
+      normal.clone().negate(),
+    ).intersectObject(mesh);
+    assert.ok(hit);
+    if (radius < 22)
+      assert.ok(hit.distance > 100, "ray enters the diagonal cavity");
+    else
+      assert.ok(
+        Math.abs(hit.distance - 40) < 0.01,
+        "rim lies on the 45-degree opening plane",
+      );
+  }
+  const [drainHit] = new THREE.Raycaster(
+    new THREE.Vector3(0, 0, -10),
+    new THREE.Vector3(0, 0, 1),
+  ).intersectObject(mesh);
+  assert.ok(drainHit.point.z > 100, "bottom drainage remains open");
+  assert.equal(diagonalModel.body.boundingBox().min[2], 0);
+  assert.equal(diagonalModel.body.boundingBox().max[2], 132);
+  geometry.dispose();
+  material.dispose();
 });
 
 test("front-facing grooves follow the official logo's positions and widths", () => {
@@ -144,4 +232,7 @@ test("front-facing grooves follow the official logo's positions and widths", () 
   material.dispose();
 });
 
-afterAll(() => model.dispose());
+afterAll(() => {
+  model.dispose();
+  diagonalModel.dispose();
+});

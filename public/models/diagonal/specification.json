@@ -1,0 +1,86 @@
+{
+  "dimensions": {
+    "diameter": 140,
+    "height": 132,
+    "wall": 6,
+    "grooveDepth": 2.2,
+    "grooveCount": 3,
+    "drainDiameter": 8,
+    "saucerDiameter": 70,
+    "assemblyLift": 4.8
+  },
+  "grooves": {
+    "reference": "https://static.linear.app/design-assets/Linear-Brand-Assets.zip?v=3",
+    "angleDegrees": 45,
+    "bands": [
+      {
+        "offsetMM": -10.551049994854635,
+        "widthMM": 10.38035300366264
+      },
+      {
+        "offsetMM": -31.311790650412192,
+        "widthMM": 10.3803431041677
+      },
+      {
+        "offsetMM": -52.07245540159233,
+        "widthMM": 10.380386018478248
+      }
+    ]
+  },
+  "opening": {
+    "angleDegrees": 45,
+    "planeDistanceMM": 60,
+    "soilDistanceMM": 55
+  },
+  "units": "mm",
+  "parts": {
+    "body": {
+      "triangles": 41312,
+      "volumeMM3": 292884.04735530046,
+      "bounds": {
+        "min": [
+          -69.89833830890713,
+          -70,
+          0
+        ],
+        "max": [
+          70,
+          70,
+          132
+        ]
+      }
+    },
+    "saucer": {
+      "triangles": 3836,
+      "volumeMM3": 10974.212814788081,
+      "bounds": {
+        "min": [
+          -35,
+          -35,
+          0
+        ],
+        "max": [
+          35,
+          35,
+          4.8
+        ]
+      }
+    },
+    "section": {
+      "triangles": 20954,
+      "volumeMM3": 146442.02367765023,
+      "bounds": {
+        "min": [
+          -69.89833830890713,
+          0,
+          0
+        ],
+        "max": [
+          70,
+          70,
+          132
+        ]
+      }
+    }
+  }
+}
