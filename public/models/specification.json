@@ -1,0 +1,63 @@
+{
+  "dimensions": {
+    "diameter": 140,
+    "height": 110,
+    "wall": 6,
+    "grooveDepth": 2.2,
+    "grooveCount": 3,
+    "drainDiameter": 8,
+    "saucerDiameter": 88,
+    "assemblyLift": 6
+  },
+  "units": "mm",
+  "parts": {
+    "body": {
+      "triangles": 36962,
+      "volumeMM3": 275802.62078496726,
+      "bounds": {
+        "min": [
+          -70,
+          -70,
+          0
+        ],
+        "max": [
+          70,
+          70,
+          110
+        ]
+      }
+    },
+    "saucer": {
+      "triangles": 3836,
+      "volumeMM3": 26648.515071355087,
+      "bounds": {
+        "min": [
+          -44,
+          -44,
+          0
+        ],
+        "max": [
+          44,
+          44,
+          10
+        ]
+      }
+    },
+    "section": {
+      "triangles": 18736,
+      "volumeMM3": 137901.31039248363,
+      "bounds": {
+        "min": [
+          -70,
+          0,
+          0
+        ],
+        "max": [
+          70,
+          70,
+          110
+        ]
+      }
+    }
+  }
+}

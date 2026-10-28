@@ -1,0 +1,29 @@
+{
+  "name": "orbital-planter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --bun vite --host 127.0.0.1 --port 5173 --strictPort",
+    "build": "bun run typecheck && bun --bun vite build",
+    "model": "bun scripts/export-model.ts",
+    "test": "bun test",
+    "typecheck": "bun --bun tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "fflate": "^0.8.3",
+    "manifold-3d": "^3.3.2",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "@types/three": "^0.180.0",
+    "typescript": "^7.0.2",
+    "vite": "^7.1.7"
+  },
+  "packageManager": "bun@1.4.4",
+  "engines": {
+    "bun": ">=1.4.4"
+  }
+}
