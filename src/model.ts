@@ -2,7 +2,7 @@ import type { Manifold, ManifoldToplevel, Vec3 } from "manifold-3d";
 
 export const dimensions = Object.freeze({
   diameter: 140,
-  height: 110,
+  height: 114,
   wall: 6,
   grooveDepth: 2.2,
   grooveCount: 3,
@@ -11,12 +11,27 @@ export const dimensions = Object.freeze({
   assemblyLift: 6,
 });
 
+const linearLogoDiagonalGaps = [
+  [5.4153, 15.90104],
+  [26.38682, 36.87255],
+  [47.35823665, 57.84401],
+] as const;
+
+const logoCoordinateToPlaneDistance = dimensions.diameter / (100 * Math.SQRT2);
+
+export const grooveLayout = Object.freeze({
+  reference:
+    "https://static.linear.app/design-assets/Linear-Brand-Assets.zip?v=3",
+  angleDegrees: 45,
+  bands: linearLogoDiagonalGaps.map(([start, end]) => ({
+    offsetMM: -((start + end) / 2) * logoCoordinateToPlaneDistance,
+    widthMM: (end - start) * logoCoordinateToPlaneDistance,
+  })),
+});
+
 const bodyProfile = {
   centerHeightMM: 62,
   floorThicknessMM: 6,
-  grooveOffsetsMM: [-56, -42, -28],
-  grooveWidthMM: 5.5,
-  grooveAngleDegrees: 45,
   grooveCutterWidthMM: 180,
   grooveCutterMarginMM: 2,
 };
@@ -65,20 +80,20 @@ export function createModel(kernel: ManifoldToplevel, circularSegments = 192) {
       sphere(outerRadiusMM - dimensions.grooveDepth),
     );
 
-    for (const offsetMM of bodyProfile.grooveOffsetsMM) {
+    for (const { offsetMM, widthMM } of grooveLayout.bands) {
       const grooveSlab = trackSolid(
         Manifold.cube(
           [
             bodyProfile.grooveCutterWidthMM,
             bodyProfile.grooveCutterWidthMM,
-            bodyProfile.grooveWidthMM,
+            widthMM,
           ],
           true,
         ),
       );
       const offsetSlab = translate(grooveSlab, [0, 0, offsetMM]);
       const diagonalSlab = trackSolid(
-        offsetSlab.rotate([0, bodyProfile.grooveAngleDegrees, 0]),
+        offsetSlab.rotate([0, grooveLayout.angleDegrees, 0]),
       );
       const shallowGroove = intersect(removableOuterSkin, diagonalSlab);
       groovedSphere = subtract(groovedSphere, shallowGroove);

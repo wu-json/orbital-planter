@@ -47,10 +47,11 @@ test("printable parts are closed, connected solids with positive volume", () => 
   }
 });
 test("body and saucer dimensions match their specification", () => {
-  assert.deepEqual(model.body.boundingBox(), {
-    min: [-70, -70, 0],
-    max: [70, 70, 110],
-  });
+  const bodyBounds = model.body.boundingBox();
+  assert.deepEqual(bodyBounds.max, [70, 70, 114]);
+  assert.equal(bodyBounds.min[1], -70);
+  assert.equal(bodyBounds.min[2], 0);
+  assert.ok(bodyBounds.min[0] >= -70 && bodyBounds.min[0] <= -67.8);
   assert.deepEqual(model.saucer.boundingBox(), {
     min: [-44, -44, 0],
     max: [44, 44, 10],
@@ -109,6 +110,38 @@ test("download archive contains exactly the two printable STL files", async () =
       await readFile(`public/models/${filename}`),
     );
   }
+});
+
+test("front-facing grooves follow the official logo's positions and widths", () => {
+  const geometry = new STLLoader().parse(
+    binarySTL(model.body.getMesh()).buffer,
+  );
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  const mesh = new THREE.Mesh(geometry, material);
+  const logoGrooveCentersMM = [-10.55105, -31.31179, -52.07246];
+
+  for (const centerMM of logoGrooveCentersMM) {
+    for (const offsetMM of [-5.6, -5, 0, 5, 5.6]) {
+      const diagonalCoordinate = (centerMM + offsetMM) / Math.SQRT2;
+      const ray = new THREE.Raycaster(
+        new THREE.Vector3(diagonalCoordinate, -100, 62 + diagonalCoordinate),
+        new THREE.Vector3(0, 1, 0),
+      );
+      const [intersection] = ray.intersectObject(mesh);
+      assert.ok(intersection, "groove sample hits the planter surface");
+      const radiusMM = intersection.point.distanceTo(
+        new THREE.Vector3(0, 0, 62),
+      );
+      const expectedRadiusMM = Math.abs(offsetMM) <= 5 ? 67.8 : 70;
+      assert.ok(
+        Math.abs(radiusMM - expectedRadiusMM) < 0.05,
+        `groove at ${centerMM} mm has the expected surface at offset ${offsetMM} mm`,
+      );
+    }
+  }
+
+  geometry.dispose();
+  material.dispose();
 });
 
 afterAll(() => model.dispose());

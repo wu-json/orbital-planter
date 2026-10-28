@@ -142,7 +142,7 @@ let targetBodyHeightMM: number = dimensions.assemblyLift;
 let backgroundMode: BackgroundMode = "auto";
 
 function resetCamera() {
-  camera.position.set(180, -330, 210);
+  camera.position.set(0, -390, 195);
   controls.target.set(0, 0, 53);
   controls.update();
 }

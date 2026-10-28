@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { zipSync } from "fflate";
 import Module, { type Box } from "manifold-3d";
-import { createModel, dimensions } from "../src/model.ts";
+import { createModel, dimensions, grooveLayout } from "../src/model.ts";
 import { binarySTL } from "../src/stl.ts";
 
 type PartName = "body" | "saucer" | "section";
@@ -50,7 +50,7 @@ try {
   await writeFile("public/models/orbital-planter.zip", printableArchive);
 
   const specification = JSON.stringify(
-    { dimensions, units: "mm", parts },
+    { dimensions, grooves: grooveLayout, units: "mm", parts },
     null,
     2,
   );
